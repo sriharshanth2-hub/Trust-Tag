@@ -71,16 +71,32 @@ export function VerificationPage() {
   const checkDocumentIntegrity = async () => {
     if (!document) return;
 
+    // If no hash was stored, skip tamper check
+    if (!document.file_hash) {
+      setIsTampered(false);
+      return;
+    }
+
     setCheckingTamper(true);
     try {
       const response = await fetch(document.file_url);
+      if (!response.ok) {
+        // Can't fetch file - don't flag as tampered
+        setIsTampered(false);
+        return;
+      }
       const blob = await response.blob();
       const file = new File([blob], document.file_name, { type: 'application/pdf' });
       const currentHash = await generateFileHash(file);
 
+      console.log('Stored hash:', document.file_hash);
+      console.log('Current hash:', currentHash);
+
       setIsTampered(currentHash !== document.file_hash);
     } catch (err) {
       console.error('Error checking document integrity:', err);
+      // On error, default to not tampered
+      setIsTampered(false);
     } finally {
       setCheckingTamper(false);
     }
