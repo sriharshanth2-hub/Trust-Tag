@@ -15,7 +15,7 @@ export function VerificationPage() {
   const [document, setDocument] = useState<VerificationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const [isTampered, setIsTampered] = useState(false);
+  const [isTampered, setIsTampered] = useState<boolean | null>(null);
   const [checkingTamper, setCheckingTamper] = useState(false);
 
   useEffect(() => {
@@ -68,45 +68,28 @@ export function VerificationPage() {
     }
   };
 
-  const checkDocumentIntegrity = async () => {
+  const checkDocumentIntegrity = async (localFile: File) => {
     if (!document) return;
-
-    // If no hash was stored, skip tamper check
-    if (!document.file_hash) {
-      setIsTampered(false);
-      return;
-    }
 
     setCheckingTamper(true);
     try {
-      const response = await fetch(document.file_url);
-      if (!response.ok) {
-        // Can't fetch file - don't flag as tampered
-        setIsTampered(false);
-        return;
-      }
-      const blob = await response.blob();
-      const file = new File([blob], document.file_name, { type: 'application/pdf' });
-      const currentHash = await generateFileHash(file);
-
+      const currentHash = await generateFileHash(localFile);
       console.log('Stored hash:', document.file_hash);
       console.log('Current hash:', currentHash);
-
       setIsTampered(currentHash !== document.file_hash);
     } catch (err) {
       console.error('Error checking document integrity:', err);
-      // On error, default to not tampered
-      setIsTampered(false);
     } finally {
       setCheckingTamper(false);
     }
   };
 
-  useEffect(() => {
-    if (document) {
-      checkDocumentIntegrity();
+  const handleVerifyFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && document) {
+      checkDocumentIntegrity(file);
     }
-  }, [document]);
+  };
 
   if (loading) {
     return (
@@ -148,7 +131,7 @@ export function VerificationPage() {
             </div>
           </div>
 
-          {isTampered && (
+          {isTampered === true && (
             <div className="bg-red-500 text-white px-8 py-4">
               <div className="flex items-center gap-3">
                 <AlertTriangle className="w-6 h-6" />
@@ -235,34 +218,50 @@ export function VerificationPage() {
             </div>
 
             <div className="border-t border-slate-200 pt-6">
-              <h3 className="text-lg font-semibold text-slate-900 mb-4">Document Integrity</h3>
-              <div className="flex items-start gap-3 mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">Document Integrity</h3>
+              <p className="text-sm text-slate-500 mb-4">
+                To verify your copy hasn't been tampered with, upload the file you received below.
+              </p>
+
+              <label className="flex items-center gap-3 cursor-pointer w-fit px-4 py-2 border-2 border-dashed border-slate-300 rounded-lg hover:border-emerald-400 transition mb-4">
+                <Shield className="w-5 h-5 text-slate-400" />
+                <span className="text-sm text-slate-600">Upload your copy to verify</span>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={handleVerifyFile}
+                />
+              </label>
+
+              <div className="flex items-start gap-3 mb-4 min-h-[28px]">
                 {checkingTamper ? (
-                  <div className="text-slate-600">Checking document integrity...</div>
-                ) : isTampered ? (
+                  <div className="text-slate-600 text-sm">Checking document integrity...</div>
+                ) : isTampered === true ? (
                   <>
                     <AlertTriangle className="w-6 h-6 text-red-500 mt-0.5" />
                     <div>
                       <p className="font-semibold text-red-700">Document has been tampered</p>
                       <p className="text-sm text-red-600">
-                        The current file hash does not match the verified hash
+                        The file you uploaded does not match the verified original
                       </p>
                     </div>
                   </>
-                ) : (
+                ) : isTampered === false ? (
                   <>
                     <Shield className="w-6 h-6 text-green-500 mt-0.5" />
                     <div>
                       <p className="font-semibold text-green-700">Document is authentic</p>
                       <p className="text-sm text-green-600">
-                        Hash verification passed - document has not been modified
+                        Hash verification passed — your file matches the verified original
                       </p>
                     </div>
                   </>
-                )}
+                ) : null}
               </div>
+
               <div className="bg-slate-50 rounded-lg p-4 font-mono text-xs break-all">
-                <p className="text-slate-500 mb-1">SHA-256 Hash:</p>
+                <p className="text-slate-500 mb-1">Verified SHA-256 Hash:</p>
                 <p className="text-slate-900">{document.file_hash}</p>
               </div>
             </div>
